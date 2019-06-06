@@ -9,12 +9,13 @@ class Proxy
     end
 
     def perform
-      request = request_class.new(uri)
-
-      @headers.each {|h| request[h.key] = h.value }
+      http_request = request_class.new(uri).tap do |request|
+        request.body = @body
+        @headers.each {|h| request[h.key] = h.value }
+      end
 
       http_response = Net::HTTP.start(uri.host, uri.port, options) do |http|
-        http.request(request)
+        http.request(http_request)
       end
 
       Response.new(http_response)
@@ -35,7 +36,10 @@ class Proxy
     end
 
     def uri
-      base_uri.tap {|u| u.path << @path }
+      base_uri.tap do |uri|
+        uri.path << @path
+        uri.query = @params.to_query if @params.any?
+      end
     end
 
     def base_uri
