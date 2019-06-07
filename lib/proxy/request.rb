@@ -1,16 +1,44 @@
 class Proxy
+  class Params
+    extend Forwardable
+
+    def_delegators :@params, :to_query, :any?
+
+    def initialize(params)
+      @params = params
+    end
+
+    def signature
+      Digest::MD5.hexdigest(@params.sort.join)
+    end
+  end
+
+  class Body
+    def initialize(body)
+      @body = body
+    end
+
+    def signature
+      Digest::MD5.hexdigest(to_s)
+    end
+
+    def to_s
+      @to_s ||= @body.read
+    end
+  end
+
   class Request
     def initialize(method_name, path, params: {}, headers: {}, body: nil)
       @method_name = method_name
       @path        = path
-      @params      = params
+      @params      = Params.new(params)
       @headers     = headers
-      @body        = body
+      @body        = Body.new(body)
     end
 
     def perform
       http_request = request_class.new(uri).tap do |request|
-        request.body = @body
+        request.body = @body.to_s
         @headers.each {|h| request[h.key] = h.value }
       end
 
@@ -19,6 +47,10 @@ class Proxy
       end
 
       Response.new(http_response)
+    end
+
+    def signature
+      [@method_name, @params.signature, @body.signature].join("/")
     end
 
     private
